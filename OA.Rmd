@@ -1,0 +1,170 @@
+---
+title: "Operation Analytics"
+author: "Jasmine Brown"
+date: "11/10/2019"
+output: html_document
+---
+Most people are using some form of electricity every second of the day. We use electricity to charge our phones, to watching tv. But, have you ever thought about how electricity gets to your house? Power in our homes is used for lights, heating, and cooling system. Our power bills are charged and viewed by Kilo wats hour to determine the rates of the billing. My goal is to find trends in the average weekly and monthly usage of one person's power usage of a year. I also want to create a forecasting model to predict the power usage for the next year. This data set is an hourly record of a person's power usage for each variable for an entire year. Each day was recorded for twenty hours. Analyzing this data set, I will look at the total usage of power every hour the total usage of power for every month and the total usage of power for the monthly moving average for the total power usage and also us a time series forecast to predict the monthly average of power usage next year. The data set came from Southern Company. It contains 8760 observations and 12 variables. But will add some columns with totals and averages, so do further analysis. In the machine learning portion, I want to predict the future usage of power. 
+
+The First step in for any project is to install and load the necessary packages by declaring the libraries. The plyr package is to be used to select the variables in the clean data and the tidy verse for most of the other functions.  Tidyverse is considered the swiss knife because of its unlimited capabilities. All packages used in the data wrangling process and the statistics are loaded into the console.
+
+
+```{r}
+library(tseries)
+library(forecast)
+library(dplyr)
+library(zoo)
+library(rio)
+library(tidyverse)
+
+```
+To begin the cleaning process, we take a peek at the working directory with the getwd() function.  If the working directory is not set to read the files, then the working directory has to be changed.  The working directory is confirmed, and the data is imported
+
+```{r}
+setwd("~/Desktop/Project")
+datax <-read.csv("df.csv")
+datax <- select(datax, -c(X))
+```
+The as.date function formatted the dates to get them ready for the time series. These functions also take the date from character format. The glimpse function provides more concise information regarding the data set.  A glimpse of the data set is called to determine the type of variables and ensure that the data set is correct.
+```{r}
+date <- as.Date(datax$date, "%m/%d/%y")
+X<-(datax)
+glimpse(X)
+```
+This portion of the code creates a time series for the variable of total usage for each hour — the total usage of each system. The clean count column creates a clean version of the variable I created to make sure I am working with useful data.
+
+```{r}
+time <- ts(X[,c("Total.use.hr.KWH")])
+X$clean_count = tsclean(time)
+```
+Exploratory Data Analysis
+I created two plots with the column clean and the total use to test to see if the plots were the same. The graphs are to show that the variables are the same.
+
+```{r}
+ggplot()+ geom_line(data = X, aes(x =date, y=clean_count)) + ylab("clean_count")
+
+ggplot()+ geom_line(data = X, aes(x =date, y=Total.use.hr.KWH)) + ylab("Total.use.hr.KWH")
+
+```
+
+This function creates a column for the weekly moving average of total usage and the monthly moving average of the total usage where I use a formula to multiply by the number of hours in a week and the number of hours in a month to get the order. It also inputs the average in as an outlier for the NA's. A moving average can smooth out the noise of random outliers and emphasize long-term trends.
+
+```{r}
+#outlier missing data,
+X$count_wa = ma(X$Total.use.hr.KWH, order = 168)
+X$cont_Ma = ma(X$Total.use.hr.KWH, order = 720)
+summary(X)
+X2 <- replace(X, TRUE, lapply(X, na.aggregate))
+summary(X2)
+```
+
+These two GGplot are the plots of the total uses with the weekly moving aver and the monthly moving average on both data sets. We can conclude during January, November, and December the most electricity is being used. Instead of that during the summer month, we would naturally think that more eclectic is used because of bills fluctuate. We moved in the mean of the columns to fill in for the missing data
+
+```{r}
+ggplot() +
+  geom_line(data = X, aes(x = date, y = Total.use.hr.KWH, colour ="Total Use per hour "))  + 
+  geom_line( data = X, aes(x = date, y = count_wa, colour ="Weekly moving average")) +
+  geom_line(data = X, aes(x = date, y = cont_Ma, colour ="Monthly moving average"))
+
+ggplot() + 
+  geom_line(data = X2, aes(x = date, y = clean_count, colour ="counts"))  + 
+  geom_line(data = X2, aes(x = date, y = count_wa, colour ="Weekly moving average")) +
+  geom_line(data = X2, aes(x = date, y = cont_Ma, colour ="Monthly moving average"))
+```
+
+The next plots were with the variables heating gas kwh and general int lights kwh. As the heating gas increase, the usage of general int lights starts a decrease. The ggplot function was used to also create a graph of the heating gas with the dates, and from January to April it shows a negative linear relationship, and it evens out during the summer months; then, in October there is a positive linear relationship where the usage increase until December.
+
+```{r}
+#Create a scatter plot for "Heating Gas" and "Generl int lighting".
+ggplot(X, aes(x =Heating.Gas.KWH , y =Gen.Int.LightsElectricity.KWH,col="")) +
+  geom_point()
+
+
+ggplot(X, aes(x =date , y =Heating.Gas.KWH, col="Heating.Gas.Kwh")) +
+  geom_point()
+
+
+
+
+```
+I also did a line plot on the dates of the heating ventilating and air condition usage. The results conclude that the peak is being used at the end of August. Usage begins to rise in May and decreases in October, becoming almost none from November until January.
+
+```{r}
+ggplot(data = X, aes(x = date, y =Electricity.HVAC.KWH )) +
+      geom_bar(stat = "identity", fill = "purple") +
+      labs(title = "Heating Venelating and Air Condotioning every hour Monthly",  x = "Date", y = "Electricity.HVAC.KWH")
+
+```
+Statistical Analysis 
+Now that it’s time for the decomposition of the data for in or to get ready for our forecasting model. Decomposing the data means taking seasonality, Trend, and cycle into account. This removes seasonality is a characteristic of a time series in which the data experiences regular and predictable changes that recur every calendar year. Any predictable fluctuation or pattern that recurs or repeats over one year is said to be seasonal. the seasonality, but I don't have any n the date because of seasonality. We still decomposed because we can see the plot of the trends and the randomness of the data that can't be accounted for over time. Count ma is a time series on the total use per hour. The frequency is over a quarterly period of the year, so I used the 24 hours in daytime 7-day times 12-week period to get the quarterly frequency.
+
+
+```{r}
+count_ma <- ts(na.omit(X2$Total.use.hr.KWH),frequency = 2016)
+decomp = stl(count_ma, "periodic")
+deseasonal_cnt <- seasadj(decomp)
+plot(decomp)
+```
+
+
+The test for permanent variance is the (ADF) augmented dick fuller test. A p-value less .05 indicates the data set is stationary. If your is not statutory, you can’t move on in the modeling. The ACF and pacf is the autocorrelation and partial autocorrelation between a series and its lag. A "lag" is a fixed amount of passing the time. The kth lag is the period that happened "k" time points before time. If our data wasn't stationary, we could do a different test for the seasonal adjustment. Proving a stationary data set is critical when predicting. It shows that the mean and the variance are the same throughout the whole year or time series.
+
+```{r}
+adf.test(count_ma, alternative ="stationary")
+
+acf(count_ma,main="")
+
+pacf(count_ma,main="")
+
+count_d1 =diff(deseasonal_cnt, differences = 1)
+plot(count_d1)
+acf(count_d1,main="Acf for Diff")
+```
+
+In this data set, we are trying to show that the values are highly related to the previous values. So, I am trying to show that the total usage from one moth may be related to the total usage of the next month. So, through forecasting and the model, we can build a formula that will predict the usage of the next day, month, or year.
+Here we can see the there is a major decreasing trend, a major increasing trend between certain months. Here the model, the values in the model, is for the different models. The last value is for the ma model is the error term. Our model gave us a (5,1,2) the five say we need to look at the data five years back. The one is the difference, and the 2 tells us that we need to go two years back when creating the equation to forecast the next year, instead of creating a prediction model through the mathematical equation. We can use the forecast function to draw a prediction function of the forecast. The forecast graph shows a prediction of the trends of the next year.
+
+
+```{r}
+library(WDI)
+plot(data =X2,Total.use.hr.KWH~date)
+library(forecast)
+#get auto pdq values 
+model<-auto.arima(count_ma,seasonal = FALSE)
+model
+
+```
+
+
+
+```{r}
+predict(model,n.ahead =8760,se.fit = T )
+TUForecast <- forecast(object =model,h=8760 )
+par(mar=c(1,1,1,1))
+plot(TUForecast)
+```
+
+
+
+```{r}
+
+ggplot(X2, aes(x=date,y=Time))+ geom_line(aes(y=Electricity.HVAC.KWH, col="Electricity.HVAC.KWH"))+
+  geom_line(aes(y=Gen.Int.LightsElectricity.KWH, col="Gen.Int.LightsElectricity.KWH"))+ 
+  geom_line(aes(y=Gen.Ext.LightsElectricity.KWH, col="Gen.Ext.LightsElectricity.KWH"))+ 
+  geom_line(aes(y=Appl.Int.EquipElectricity.KWH, col="Appl.Int.EquipElectricity.KWH"))+
+  geom_line(aes(y=Misc.Int.EquipElectricity.KWH, col="Misc.Int.EquipElectricity.KWH"))+
+  geom_line(aes(y=Water.Heat.SystemElectric.KWH, col="Water.Heat.SystemElectric.KWH"))+
+  geom_line(aes(y=Heating.Gas.KWH, col="Heating.Gas.KWH"))+ 
+  labs(title="Time Series for each electricty usage", 
+       caption="Source: Equipment", y="Time", x="Date") +theme(axis.text.x = element_text(angle = 90, vjust=0.5, size = 8),  # rotate x axis text
+        panel.grid.minor = element_blank()) 
+```
+
+This is the fourth model and it is the model of best fit.
+$$ Y_t=0.047(Y_{t-1})-0.918(Y_{t-2})+(X_t)-0.5749(X_{t-1})+1.00(X_{t-2})-.414(X_{t-3})$$
+```
+
+Recommendations 
+1. Look at the data over a range of years, look at seasonality data
+2.Create a Training and testing set on the data and run a fit to get accurate result 
+3. In the future one we predict the usage over a range of years make recommendation to lower usage or recommendations on the rates of usage
